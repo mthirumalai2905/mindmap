@@ -419,13 +419,21 @@ export function buildWorkspace(opts: TemplateOptions): WorkspaceData {
   const link = (aType: CollectionKey, aId: ID, bType: CollectionKey, bId: ID, label = "") =>
     add("links", make("links", { aType, aId, bType, bId, label, isExample: example }));
 
+  const templates = opts.includeTemplate
+    ? ECOSYSTEM_TEMPLATE.filter((p) => !opts.productSlugs || opts.productSlugs.includes(p.slug))
+    : [];
+  // A single-product workspace is centred on that product rather than the ecosystem.
+  const soloProduct = templates.length === 1 ? templates[0] : null;
+
   const root = add(
     "nodes",
     make("nodes", {
-      title: opts.includeTemplate ? "Mindmap — Synx Ecosystem" : opts.workspaceName,
-      description: opts.includeTemplate
-        ? "The strategic map of products, content, research and initiatives across the Synx ecosystem."
-        : "",
+      title: soloProduct ? soloProduct.name : opts.includeTemplate ? "Mindmap — Synx Ecosystem" : opts.workspaceName,
+      description: soloProduct
+        ? soloProduct.tagline
+        : opts.includeTemplate
+          ? "The strategic map of products, content, research and initiatives across the Synx ecosystem."
+          : "",
       kind: "root",
       status: null,
     }),
@@ -436,7 +444,6 @@ export function buildWorkspace(opts: TemplateOptions): WorkspaceData {
   const categoryNodeIds: Record<string, ID> = {};
 
   if (opts.includeTemplate) {
-    const templates = ECOSYSTEM_TEMPLATE.filter((p) => !opts.productSlugs || opts.productSlugs.includes(p.slug));
     templates.forEach((tpl, i) => {
       const product = add(
         "products",
@@ -457,18 +464,21 @@ export function buildWorkspace(opts: TemplateOptions): WorkspaceData {
         const cat = add("categories", make("categories", { productId: product.id, name, order: ci }));
         categoryIds[`${tpl.slug}/${name}`] = cat.id;
       });
-      const branch = add(
-        "nodes",
-        make("nodes", {
-          title: tpl.name,
-          description: tpl.tagline,
-          kind: "product",
-          parentId: root.id,
-          productId: product.id,
-          status: null,
-          order: i,
-        }),
-      );
+      if (soloProduct) data.nodes[root.id] = { ...root, productId: product.id };
+      const branch = soloProduct
+        ? root
+        : add(
+            "nodes",
+            make("nodes", {
+              title: tpl.name,
+              description: tpl.tagline,
+              kind: "product",
+              parentId: root.id,
+              productId: product.id,
+              status: null,
+              order: i,
+            }),
+          );
       tpl.mapCategories.forEach((name, ci) => {
         const node = add(
           "nodes",

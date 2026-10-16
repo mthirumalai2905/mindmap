@@ -61,7 +61,7 @@ function CaptureForm({ initialTarget, initialProduct }: { initialTarget: Target;
     let created: { collection: CollectionKey; id: ID };
     if (target === "nodes") {
       const data = useStore.getState().data!;
-      const branch = pid ? Object.values(data.nodes).find((n) => n.kind === "product" && n.productId === pid) : null;
+      const branch = pid ? Object.values(data.nodes).find((n) => (n.kind === "product" || n.kind === "root") && n.productId === pid) : null;
       const node = addChildNode(branch?.id ?? rootNodeId(), { title: parsed.data.title, kind: "idea", productId: pid });
       created = { collection: "nodes", id: node.id };
     } else {

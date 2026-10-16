@@ -27,7 +27,9 @@ export function addChildNode(parentId: ID | null, patch: Partial<MapNode> = {}):
   const { byId, list } = nodesState();
   const parent = parentId ? byId[parentId] : null;
   const siblings = list.filter((n) => n.parentId === parentId);
-  const kind = patch.kind ?? (parent?.kind === "root" ? "product" : parent?.kind === "product" ? "category" : "idea");
+  const kind =
+    patch.kind ??
+    (parent?.kind === "root" ? (parent.productId ? "category" : "product") : parent?.kind === "product" ? "category" : "idea");
   const size = NODE_SIZE[kind];
   let position = { x: 0, y: 0 };
   if (parent) {
@@ -73,7 +75,8 @@ export function reparentNode(id: ID, newParentId: ID | null) {
   const { byId, list } = nodesState();
   const newParent = newParentId ? byId[newParentId] : null;
   const order = list.filter((n) => n.parentId === newParentId).reduce((m, s) => Math.max(m, s.order), -1) + 1;
-  const productId = newParent?.kind === "root" ? byId[id].productId : newParent?.productId ?? byId[id].productId;
+  const productId =
+    newParent?.kind === "root" && !newParent.productId ? byId[id].productId : newParent?.productId ?? byId[id].productId;
   updateRecord("nodes", id, { parentId: newParentId, order, productId });
   if (newParent?.collapsed) updateRecord("nodes", newParent.id, { collapsed: false });
   maybeRelayout();
