@@ -108,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     if (load === "empty") router.replace("/onboarding");
-    if (load === "auth") router.replace("/login");
+
   }, [load, router]);
   useGlobalShortcuts();
   useUnsavedGuard();

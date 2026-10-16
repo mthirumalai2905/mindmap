@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { workspaceNameSchema } from "@/lib/schemas";
 import { ECOSYSTEM_TEMPLATE, buildWorkspace } from "@/lib/seed";
 import { initStore, replaceWorkspace, useStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, pluralize } from "@/lib/utils";
 import { CenteredBrand } from "../shell/app-shell";
 import { Button } from "../ui/button";
 import { Field, Input } from "../ui/input";
@@ -29,9 +29,7 @@ export function Onboarding() {
   useEffect(() => {
     void initStore();
   }, []);
-  useEffect(() => {
-    if (load === "auth") router.replace("/login");
-  }, [load, router]);
+
 
   const nameCheck = workspaceNameSchema.safeParse(name);
   const steps = useTemplate ? STEPS : STEPS.filter((s) => s !== "Branches");
@@ -60,7 +58,7 @@ export function Onboarding() {
     router.push(useTemplate ? "/map" : "/overview");
   };
 
-  if (load === "idle" || load === "loading" || load === "auth") {
+  if (load === "idle" || load === "loading") {
     return (
       <CenteredBrand>
         <LoaderCircle className="mt-10 size-5 animate-spin text-ink-4" />
@@ -126,6 +124,7 @@ export function Onboarding() {
               </div>
             </form>
           ) : null}
+
 
           {current === "Template" ? (
             <div>
@@ -229,7 +228,7 @@ export function Onboarding() {
               <ul className="mt-4 flex flex-col gap-2 text-[13px] text-ink-2">
                 <li className="flex gap-2">
                   <Check className="mt-0.5 size-3.5 shrink-0" />
-                  {useTemplate ? `${slugs.length} branches with content categories` : "A blank map with a single root node"}
+                  {useTemplate ? `${pluralize(slugs.length, "branch", "branches")} with content categories` : "A blank map with a single root node"}
                 </li>
                 {useTemplate ? (
                   <li className="flex gap-2">

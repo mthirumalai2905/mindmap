@@ -1,4 +1,4 @@
-import type { WorkspaceData } from "../types";
+import type { ActivityEntry, CollectionKey, Workspace, WorkspaceData } from "../types";
 
 export type PersistenceMode = "local" | "supabase";
 
@@ -9,6 +9,15 @@ export class AuthRequiredError extends Error {
   }
 }
 
+/** A change made by someone else, delivered by the backend. */
+export type RemoteChange =
+  | { kind: "upsert"; collection: CollectionKey; record: { id: string; updatedAt: string } }
+  | { kind: "delete"; collection: CollectionKey; id: string }
+  | { kind: "workspace"; workspace: Workspace }
+  | { kind: "activity"; entry: ActivityEntry }
+  /** Full re-read after a reconnect or when the tab regains focus. */
+  | { kind: "snapshot"; data: WorkspaceData };
+
 export interface PersistenceAdapter {
   mode: PersistenceMode;
   /** Short human description shown in the UI. */
@@ -17,9 +26,11 @@ export interface PersistenceAdapter {
   /** `previous` is the last successfully saved snapshot, used to compute diffs. */
   save(next: WorkspaceData, previous: WorkspaceData | null): Promise<void>;
   clear(): Promise<void>;
-  /** Subscribe to changes made elsewhere (other tabs or users). */
+  /** Another tab changed local data (local mode). */
   onExternalChange?(cb: () => void): () => void;
-  signOut?(): Promise<void>;
+  /** Live changes from other members (Supabase mode). */
+  onRemoteChange?(cb: (change: RemoteChange) => void): () => void;
+
 }
 
 export function supabaseConfigured(): boolean {

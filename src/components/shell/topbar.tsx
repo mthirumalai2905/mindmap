@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, ChevronRight, CircleUser, Keyboard, LoaderCircle, LogOut, Menu as MenuIcon, Plus, Search } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, CircleUser, Keyboard, LoaderCircle, Menu as MenuIcon, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { retrySave, setUI, useStore } from "@/lib/store";
@@ -113,23 +113,13 @@ export function Topbar() {
           </Button>
         </MenuTrigger>
         <MenuContent className="w-64">
-          <MenuLabel>{adapter?.mode === "local" ? "Local developer (no account)" : "Signed in"}</MenuLabel>
+          <MenuLabel>{adapter?.mode === "local" ? "Development mode" : "Shared workspace · no sign-in"}</MenuLabel>
           <p className="px-2 pb-1.5 text-xs leading-relaxed text-ink-3">{adapter?.description}</p>
           <MenuSeparator />
           <MenuItem onSelect={() => setUI({ shortcutsOpen: true })} shortcut="?">
             <Keyboard /> Keyboard shortcuts
           </MenuItem>
           <MenuItem onSelect={() => router.push("/settings")}>Workspace settings</MenuItem>
-          {adapter?.signOut ? (
-            <MenuItem
-              onSelect={async () => {
-                await adapter.signOut!();
-                window.location.href = "/login";
-              }}
-            >
-              <LogOut /> Sign out
-            </MenuItem>
-          ) : null}
         </MenuContent>
       </Menu>
     </header>

@@ -211,15 +211,18 @@ function MindMapCanvas() {
   );
 
   const [rfNodes, setRfNodes] = useState<MindFlowNode[]>(derivedNodes);
-  useEffect(() => {
-    setRfNodes((prev) => {
-      const byId = new Map(prev.map((n) => [n.id, n]));
-      return derivedNodes.map((d) => {
+  const [syncedFrom, setSyncedFrom] = useState(derivedNodes);
+  if (syncedFrom !== derivedNodes) {
+    // Store changed: rebuild nodes but keep React Flow's measurements.
+    setSyncedFrom(derivedNodes);
+    const byId = new Map(rfNodes.map((n) => [n.id, n]));
+    setRfNodes(
+      derivedNodes.map((d) => {
         const p = byId.get(d.id);
         return p ? { ...d, measured: p.measured, width: p.width, height: p.height } : d;
-      });
-    });
-  }, [derivedNodes]);
+      }),
+    );
+  }
 
   const rfEdges = useMemo<Edge[]>(() => {
     const out: Edge[] = [];

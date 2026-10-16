@@ -2,8 +2,9 @@
 
 import { create } from "zustand";
 import { make } from "./factories";
-import { AuthRequiredError, supabaseConfigured, type PersistenceAdapter } from "./persistence/adapter";
+import { AuthRequiredError, supabaseConfigured, type PersistenceAdapter, type RemoteChange } from "./persistence/adapter";
 import { createLocalAdapter } from "./persistence/local";
+import { COLLECTION_KEYS } from "./types";
 import type {
   ActivityEntry,
   CollectionKey,
@@ -103,7 +104,11 @@ export async function initStore() {
     const data = await adapter.load();
     lastSaved = data;
     useStore.setState({ data, load: data ? "ready" : "empty", saveState: "saved" });
-    adapter.onExternalChange?.(() => useStore.setState({ externalChange: true }));
+    if (!subscribed) {
+      subscribed = true;
+      adapter.onExternalChange?.(() => useStore.setState({ externalChange: true }));
+      adapter.onRemoteChange?.(applyRemote);
+    }
   } catch (err) {
     if (err instanceof AuthRequiredError) {
       useStore.setState({ load: "auth" });
@@ -126,7 +131,26 @@ async function flush() {
   saving = adapter
     .save(snapshot, lastSaved)
     .then(() => {
-      lastSaved = snapshot;
+      const mergedDuringSave = lastSaved;
+      const current = useStore.getState().data;
+      let next: WorkspaceData = snapshot;
+      if (mergedDuringSave && current) {
+        // Keep remote records merged while this save was in flight marked as saved.
+        for (const key of COLLECTION_KEYS) {
+          const merged = mergedDuringSave[key] as Record<ID, unknown>;
+          const cur = current[key] as Record<ID, unknown>;
+          const snap = snapshot[key] as Record<ID, unknown>;
+          let copy: Record<ID, unknown> | null = null;
+          for (const id of Object.keys(merged)) {
+            if (merged[id] === cur[id] && snap[id] !== cur[id]) {
+              copy ??= { ...snap };
+              copy[id] = cur[id];
+            }
+          }
+          if (copy) next = { ...next, [key]: copy };
+        }
+      }
+      lastSaved = next;
       const pending = useStore.getState().data !== snapshot;
       useStore.setState({ saveState: pending ? "pending" : "saved", saveError: null, lastSavedAt: nowIso() });
       if (pending) scheduleSave();
@@ -150,6 +174,121 @@ function scheduleSave(delay = 450) {
     saveTimer = null;
     void flush();
   }, delay);
+}
+
+/* ------------------------------------------------------------------ */
+/* Remote changes: last write wins per record                          */
+/* ------------------------------------------------------------------ */
+
+let subscribed = false;
+
+const stamp = (r: { updatedAt?: string } | undefined) => (r?.updatedAt ? Date.parse(r.updatedAt) : 0);
+
+function sameContent(a: object, b: object): boolean {
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  for (const k of Object.keys(ra)) {
+    if (k === "createdAt" || k === "updatedAt") {
+      if (Date.parse(String(ra[k])) !== Date.parse(String(rb[k]))) return false;
+    } else if (JSON.stringify(ra[k] ?? null) !== JSON.stringify(rb[k] ?? null)) {
+      if (!(k === "isExample" && !ra[k] && !rb[k])) return false;
+    }
+  }
+  return true;
+}
+
+type AnyRecord = { id: ID; updatedAt: string };
+type Maps = Record<CollectionKey, Record<ID, AnyRecord>>;
+
+/** Merge one incoming record into `data`/`saved` (both copied on write). */
+function mergeUpsert(data: Maps, saved: Maps, key: CollectionKey, incoming: AnyRecord) {
+  const local = data[key][incoming.id];
+  const base = saved[key][incoming.id];
+  if (local && sameContent(local, incoming)) {
+    if (base !== local) saved[key] = { ...saved[key], [incoming.id]: local };
+    return;
+  }
+  const dirty = local !== base;
+  // Our own unsaved change is newer: keep it; the next save overwrites the remote row.
+  if (dirty && local && stamp(local) > stamp(incoming)) return;
+  // Deleted here and not yet saved: our delete is the latest write.
+  if (dirty && !local && base) return;
+  data[key] = { ...data[key], [incoming.id]: incoming };
+  saved[key] = { ...saved[key], [incoming.id]: incoming };
+}
+
+function mergeDelete(data: Maps, saved: Maps, key: CollectionKey, id: ID) {
+  const local = data[key][id];
+  const base = saved[key][id];
+  if (local && local !== base) return; // edited here since; the pending save re-creates it
+  if (local) {
+    const next = { ...data[key] };
+    delete next[id];
+    data[key] = next;
+  }
+  if (base) {
+    const next = { ...saved[key] };
+    delete next[id];
+    saved[key] = next;
+  }
+}
+
+function mergeActivity(list: ActivityEntry[], incoming: ActivityEntry[]): ActivityEntry[] {
+  const ids = new Set(list.map((a) => a.id));
+  const add = incoming.filter((a) => !ids.has(a.id));
+  if (!add.length) return list;
+  return [...list, ...add].sort((a, b) => a.at.localeCompare(b.at)).slice(-MAX_ACTIVITY);
+}
+
+function applyRemote(change: RemoteChange) {
+  const { data } = useStore.getState();
+  if (!data || !lastSaved) return;
+  const d = { ...data } as unknown as Maps & WorkspaceData;
+  const s = { ...lastSaved } as unknown as Maps & WorkspaceData;
+
+  const mergeWorkspace = (ws: Workspace) => {
+    const merged = { ...d.workspace, ...ws };
+    const dirty = d.workspace !== s.workspace;
+    if (dirty && stamp(d.workspace) > stamp(ws)) {
+      // Keep local edits but accept server-generated fields.
+      d.workspace = { ...d.workspace, joinCode: ws.joinCode, createdBy: ws.createdBy };
+      return;
+    }
+    d.workspace = merged;
+    s.workspace = merged;
+  };
+
+  switch (change.kind) {
+    case "upsert":
+      mergeUpsert(d, s, change.collection, change.record);
+      break;
+    case "delete":
+      mergeDelete(d, s, change.collection, change.id);
+      break;
+    case "workspace":
+      mergeWorkspace(change.workspace);
+      break;
+    case "activity":
+      d.activity = mergeActivity(d.activity, [change.entry]);
+      s.activity = mergeActivity(s.activity, [change.entry]);
+      break;
+    case "snapshot": {
+      const fresh = change.data as unknown as Maps & WorkspaceData;
+      mergeWorkspace(change.data.workspace);
+      for (const key of COLLECTION_KEYS) {
+        for (const r of Object.values(fresh[key])) mergeUpsert(d, s, key, r);
+        // Saved before but gone remotely: someone deleted it.
+        for (const id of Object.keys(s[key])) if (!fresh[key][id]) mergeDelete(d, s, key, id);
+      }
+      d.activity = mergeActivity(d.activity, change.data.activity);
+      s.activity = mergeActivity(s.activity, change.data.activity);
+      break;
+    }
+  }
+  lastSaved = s as unknown as WorkspaceData;
+  useStore.setState({ data: d as unknown as WorkspaceData });
+  const { ui } = useStore.getState();
+  if (ui.openRecord && !(d[ui.openRecord.collection] as Record<ID, unknown>)[ui.openRecord.id]) setUI({ openRecord: null });
 }
 
 export const retrySave = () => flush();
@@ -249,7 +388,7 @@ export function patchMany<K extends CollectionKey>(key: K, patches: Record<ID, P
       if (!current) continue;
       const differs = Object.entries(patch).some(([k, v]) => JSON.stringify(current[k]) !== JSON.stringify(v));
       if (!differs) continue;
-      map[id] = { ...map[id], ...patch };
+      map[id] = { ...map[id], ...patch, updatedAt: nowIso() };
       changed = true;
     }
     return changed ? { ...d, [key]: map } : d;
