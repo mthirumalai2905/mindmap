@@ -1,0 +1,481 @@
+export type ID = string;
+
+/* ---------- Shared vocabularies ---------- */
+
+export const STATUSES = [
+  "idea",
+  "planned",
+  "researching",
+  "drafting",
+  "in_review",
+  "approved",
+  "published",
+  "archived",
+] as const;
+export type Status = (typeof STATUSES)[number];
+
+export const DEFAULT_STATUS_LABELS: Record<Status, string> = {
+  idea: "Idea",
+  planned: "Planned",
+  researching: "Researching",
+  drafting: "Drafting",
+  in_review: "In Review",
+  approved: "Approved",
+  published: "Published",
+  archived: "Archived",
+};
+
+export const PRIORITIES = ["urgent", "high", "medium", "low"] as const;
+export type Priority = (typeof PRIORITIES)[number];
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  urgent: "Urgent",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+};
+
+export const CONTENT_TYPES = [
+  "article",
+  "documentation",
+  "tutorial",
+  "glossary",
+  "research_paper",
+  "pr_pitch",
+  "press_release",
+  "social_post",
+  "campaign",
+  "announcement",
+  "release_note",
+  "video",
+  "podcast",
+  "comic_issue",
+  "character_profile",
+  "story_bible",
+  "experiment",
+  "other",
+] as const;
+export type ContentType = (typeof CONTENT_TYPES)[number];
+export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
+  article: "Article",
+  documentation: "Technical documentation",
+  tutorial: "Tutorial",
+  glossary: "Glossary entry",
+  research_paper: "Research paper / proposal",
+  pr_pitch: "PR pitch",
+  press_release: "Press release",
+  social_post: "Social media post",
+  campaign: "Campaign",
+  announcement: "Product announcement",
+  release_note: "Release note",
+  video: "Video",
+  podcast: "Podcast",
+  comic_issue: "Comic issue",
+  character_profile: "Character profile",
+  story_bible: "Story bible entry",
+  experiment: "Experiment",
+  other: "Other",
+};
+
+/** Evergreen knowledge vs. time-bound news — important for RTW. */
+export const CONTENT_NATURES = ["evergreen", "news", "internal"] as const;
+export type ContentNature = (typeof CONTENT_NATURES)[number];
+export const CONTENT_NATURE_LABELS: Record<ContentNature, string> = {
+  evergreen: "Evergreen knowledge",
+  news: "Company news",
+  internal: "Internal",
+};
+
+/* ---------- Workspace ---------- */
+
+export interface Workspace {
+  id: ID;
+  name: string;
+  statusLabels: Record<Status, string>;
+  /** When on, structural map changes re-run the tidy layout. */
+  mapAutoLayout: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BaseRecord {
+  id: ID;
+  createdAt: string;
+  updatedAt: string;
+  /** Seed/sample data. Shown with an "Example" label until edited away. */
+  isExample?: boolean;
+}
+
+export interface Product extends BaseRecord {
+  slug: string;
+  name: string;
+  kind: "product" | "initiative";
+  url: string;
+  tagline: string;
+  description: string;
+  positioning: string;
+  audience: string;
+  goals: string[];
+  researchQuestions: string[];
+  order: number;
+}
+
+export interface Category extends BaseRecord {
+  productId: ID;
+  name: string;
+  description: string;
+  order: number;
+}
+
+/* ---------- Mind map ---------- */
+
+export const NODE_KINDS = [
+  "root",
+  "product",
+  "category",
+  "idea",
+  "content",
+  "initiative",
+  "research",
+  "note",
+] as const;
+export type NodeKind = (typeof NODE_KINDS)[number];
+export const NODE_KIND_LABELS: Record<NodeKind, string> = {
+  root: "Root",
+  product: "Product / branch",
+  category: "Category",
+  idea: "Idea",
+  content: "Content",
+  initiative: "Initiative",
+  research: "Research",
+  note: "Note",
+};
+
+export interface MapNode extends BaseRecord {
+  title: string;
+  description: string;
+  kind: NodeKind;
+  parentId: ID | null;
+  productId: ID | null;
+  contentType: ContentType | null;
+  status: Status | null;
+  priority: Priority | null;
+  owner: string;
+  dueDate: string;
+  tags: string[];
+  notes: string;
+  nextActions: string;
+  position: { x: number; y: number };
+  collapsed: boolean;
+  /** Sibling ordering for layout. */
+  order: number;
+}
+
+/** Cross-reference edges only. Hierarchy is `MapNode.parentId`. */
+export interface MapEdge extends BaseRecord {
+  source: ID;
+  target: ID;
+  label: string;
+}
+
+/* ---------- Content ---------- */
+
+export interface ContentItem extends BaseRecord {
+  title: string;
+  summary: string;
+  productId: ID | null;
+  categoryId: ID | null;
+  contentType: ContentType;
+  nature: ContentNature;
+  audience: string;
+  objective: string;
+  status: Status;
+  priority: Priority;
+  owner: string;
+  dueDate: string;
+  publishDate: string;
+  tags: string[];
+  urls: string[];
+  body: string;
+}
+
+/* ---------- PR & marketing ---------- */
+
+export const INITIATIVE_TYPES = [
+  "press_outreach",
+  "media_pitch",
+  "product_launch",
+  "campaign",
+  "founder_interview",
+  "thought_leadership",
+  "social_campaign",
+  "community_launch",
+  "partnership",
+  "event",
+  "investor_outreach",
+  "launch_announcement",
+] as const;
+export type InitiativeType = (typeof INITIATIVE_TYPES)[number];
+export const INITIATIVE_TYPE_LABELS: Record<InitiativeType, string> = {
+  press_outreach: "Press outreach",
+  media_pitch: "Media pitch",
+  product_launch: "Product launch",
+  campaign: "Campaign",
+  founder_interview: "Founder interview",
+  thought_leadership: "Thought leadership",
+  social_campaign: "Social campaign",
+  community_launch: "Community launch",
+  partnership: "Partnership",
+  event: "Event",
+  investor_outreach: "Investor outreach",
+  launch_announcement: "Launch announcement",
+};
+
+export interface Initiative extends BaseRecord {
+  name: string;
+  type: InitiativeType;
+  objective: string;
+  audience: string;
+  productId: ID | null;
+  keyMessage: string;
+  channels: string[];
+  targets: string[];
+  owner: string;
+  priority: Priority;
+  status: Status;
+  startDate: string;
+  endDate: string;
+  successCriteria: string;
+  notes: string;
+}
+
+/* ---------- Research ---------- */
+
+export const DECISIONS = ["undecided", "pursue", "investigate", "defer", "reject"] as const;
+export type Decision = (typeof DECISIONS)[number];
+export const DECISION_LABELS: Record<Decision, string> = {
+  undecided: "Undecided",
+  pursue: "Pursue",
+  investigate: "Investigate further",
+  defer: "Defer",
+  reject: "Reject",
+};
+
+export const EVIDENCE_KINDS = ["fact", "external", "hypothesis", "planned", "validated"] as const;
+export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
+export const EVIDENCE_KIND_LABELS: Record<EvidenceKind, string> = {
+  fact: "Established fact",
+  external: "External research",
+  hypothesis: "Internal hypothesis",
+  planned: "Planned work",
+  validated: "Validated experiment",
+};
+
+export interface Evidence {
+  id: ID;
+  kind: EvidenceKind;
+  statement: string;
+  url: string;
+}
+
+export const FEASIBILITY = ["unknown", "low", "medium", "high"] as const;
+export type Feasibility = (typeof FEASIBILITY)[number];
+export const FEASIBILITY_LABELS: Record<Feasibility, string> = {
+  unknown: "Unknown",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
+export interface ResearchIdea extends BaseRecord {
+  title: string;
+  productId: ID | null;
+  problem: string;
+  targetUser: string;
+  alternatives: string;
+  toInvestigate: string;
+  limitations: string;
+  hypothesis: string;
+  impact: string;
+  feasibility: Feasibility;
+  risks: string;
+  experiment: string;
+  successCriteria: string;
+  evidence: Evidence[];
+  decision: Decision;
+  status: Status;
+  priority: Priority;
+  owner: string;
+  dueDate: string;
+  tags: string[];
+}
+
+/* ---------- Tasks ---------- */
+
+export const TASK_STATUSES = ["todo", "in_progress", "blocked", "done"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: "To do",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  done: "Done",
+};
+
+export interface Task extends BaseRecord {
+  title: string;
+  description: string;
+  productId: ID | null;
+  status: TaskStatus;
+  priority: Priority;
+  owner: string;
+  startDate: string;
+  dueDate: string;
+  dependsOn: ID[];
+}
+
+/* ---------- Skalle universe (fiction) ---------- */
+
+export interface Character extends BaseRecord {
+  name: string;
+  role: string;
+  background: string;
+  motivations: string;
+  abilities: string;
+  references: string[];
+  tags: string[];
+}
+
+export interface StoryArc extends BaseRecord {
+  title: string;
+  synopsis: string;
+  themes: string;
+  order: number;
+  status: Status;
+}
+
+export const PRODUCTION_STATUSES = ["not_started", "in_progress", "in_review", "done"] as const;
+export type ProductionStatus = (typeof PRODUCTION_STATUSES)[number];
+export const PRODUCTION_STATUS_LABELS: Record<ProductionStatus, string> = {
+  not_started: "Not started",
+  in_progress: "In progress",
+  in_review: "In review",
+  done: "Done",
+};
+
+export const PUBLICATION_STATUSES = ["unscheduled", "scheduled", "published"] as const;
+export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
+export const PUBLICATION_STATUS_LABELS: Record<PublicationStatus, string> = {
+  unscheduled: "Unscheduled",
+  scheduled: "Scheduled",
+  published: "Published",
+};
+
+export interface ComicIssue extends BaseRecord {
+  title: string;
+  issueNumber: number | null;
+  synopsis: string;
+  arcId: ID | null;
+  scriptStatus: ProductionStatus;
+  artStatus: ProductionStatus;
+  reviewStatus: ProductionStatus;
+  publicationStatus: PublicationStatus;
+  publishDate: string;
+  script: string;
+  references: string[];
+}
+
+export const LORE_KINDS = [
+  "bible",
+  "location",
+  "civilization",
+  "timeline_event",
+  "theme",
+  "lore",
+  "storyboard",
+  "visual_reference",
+] as const;
+export type LoreKind = (typeof LORE_KINDS)[number];
+export const LORE_KIND_LABELS: Record<LoreKind, string> = {
+  bible: "Universe bible",
+  location: "Location",
+  civilization: "Civilization",
+  timeline_event: "Timeline event",
+  theme: "Theme",
+  lore: "Lore entry",
+  storyboard: "Storyboard",
+  visual_reference: "Visual reference",
+};
+
+export interface LoreEntry extends BaseRecord {
+  title: string;
+  kind: LoreKind;
+  body: string;
+  /** In-universe era or date label, used for the timeline. */
+  era: string;
+  order: number;
+  references: string[];
+  tags: string[];
+}
+
+/* ---------- Relationships & activity ---------- */
+
+export interface Link extends BaseRecord {
+  aType: CollectionKey;
+  aId: ID;
+  bType: CollectionKey;
+  bId: ID;
+  label: string;
+}
+
+export interface ActivityEntry {
+  id: ID;
+  at: string;
+  action: "created" | "updated" | "deleted" | "initialized";
+  collection: CollectionKey | "workspace";
+  entityId: ID;
+  title: string;
+}
+
+export interface Collections {
+  products: Product;
+  categories: Category;
+  nodes: MapNode;
+  edges: MapEdge;
+  content: ContentItem;
+  initiatives: Initiative;
+  research: ResearchIdea;
+  tasks: Task;
+  characters: Character;
+  arcs: StoryArc;
+  issues: ComicIssue;
+  lore: LoreEntry;
+  links: Link;
+}
+export type CollectionKey = keyof Collections;
+export const COLLECTION_KEYS: CollectionKey[] = [
+  "products",
+  "categories",
+  "nodes",
+  "edges",
+  "content",
+  "initiatives",
+  "research",
+  "tasks",
+  "characters",
+  "arcs",
+  "issues",
+  "lore",
+  "links",
+];
+
+export type CollectionMaps = { [K in CollectionKey]: Record<ID, Collections[K]> };
+
+export interface WorkspaceData extends CollectionMaps {
+  version: 1;
+  workspace: Workspace;
+  activity: ActivityEntry[];
+}
+
+export interface RecordRef {
+  collection: CollectionKey;
+  id: ID;
+}
